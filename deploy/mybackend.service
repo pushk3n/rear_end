@@ -1,0 +1,18 @@
+[Unit]
+Description=My FastAPI backend
+After=network.target
+
+[Service]
+User=youruser
+Group=youruser
+WorkingDirectory=/home/youruser/mybackend
+Environment="PATH=/home/youruser/mybackend/.venv/bin"
+Environment="DATABASE_URL=sqlite:////home/youruser/mybackend/data.db"
+Environment="SECRET_KEY=replace_with_a_secure_random_string"
+ExecStart=/home/youruser/mybackend/.venv/bin/gunicorn -k uvicorn.workers.UvicornWorker -w 1 -b 127.0.0.1:8000 app.main:app
+Restart=always
+RestartSec=3
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
