@@ -1,3 +1,13 @@
+"""
+app/auth.py
+认证相关工具：密码哈希/验证、JWT 生成与解析、以及获取当前用户的 FastAPI 依赖。
+
+说明（重要）:
+- 开发环境临时使用 pbkdf2_sha256（纯 Python）作为密码哈希算法，避免在某些系统上编译 bcrypt 的问题。
+  这样在 WSL 或一些系统上不会因为 bcrypt 编译/安装失败而导致无法运行。
+- 如果你要切回 bcrypt（生产环境常用），在 LEARNING_GUIDE.md 中有完整的恢复步骤。
+"""
+
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -11,41 +21,41 @@ from sqlmodel import select
 from app.db import get_session
 from app.models import User
 
-# 从环境变量或默认值读取密钥与配置
+# 从环境变量读取密钥等配置，如果没有设置会使用默认（仅用于开发）
 SECRET_KEY = os.getenv("SECRET_KEY", "change_me_now_change")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-# 使用 passlib 的 Context 管理密码哈希算法（这里选择 bcrypt）
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 密码哈希策略：开发时使用 pbkdf2_sha256（纯 Python）
+# 如需改回 bcrypt，替换为 schemes=["bcrypt"]，并确保系统已正确安装 bcrypt 包（参见 LEARNING_GUIDE.md）
+pwd_ctx = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-# OAuth2 的 token 获取地址（用于自动生成 docs 中的认证表单），实际登录接口是 /login
+# OAuth2PasswordBearer 用于生成 /docs 中的认证表单（tokenUrl 指向实际的登录接口）
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
 def hash_password(password: str) -> str:
     """
-    将明文密码哈希化后返回。永远不要在数据库中保存明文密码。
+    将明文密码哈希并返回哈希值（字符串）。
+    使用 passlib 的 CryptContext, 调用示例:
+      hashed = hash_password("my_password")
     """
     return pwd_ctx.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    校验明文密码与哈希值是否匹配。
+    验证明文密码是否与哈希匹配，返回 True/False。
     """
     return pwd_ctx.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
-    基于 `python-jose` 生成 JWT token。
-
-    参数：
-    - data: 要放入 token 的 payload（例如 {"sub": username}）
-    - expires_delta: 可选的过期时间（默认使用 ACCESS_TOKEN_EXPIRE_MINUTES）
-
-    返回：JWT 字符串
+    创建 JWT token。
+    - data: 字典，会被拷贝到 payload 中(例如 {"sub": username})
+    - expires_delta: 可选的过期时长(timedelta),默认使用 ACCESS_TOKEN_EXPIRE_MINUTES
+    返回: JWT 字符串
     """
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -55,15 +65,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 async def get_current_user(token: str = Depends(oauth2_scheme), session = Depends(get_session)) -> User:
     """
-    FastAPI 依赖，用于在需要鉴权的接口中获取当前登录用户。
-
-    工作流程：
-    1. 从 Authorization: Bearer <token> 中获取 token（由 oauth2_scheme 完成）
-    2. 解码并验证 token（异常会返回 401）
-    3. 从 token 的 sub 字段中取出用户名并从数据库查询对应用户记录
-    4. 如果用户不存在或 token 无效，抛出 401
-
-    这样在路由中使用 `current_user: User = Depends(get_current_user)` 就可以获得合法用户对象。
+    FastAPI 依赖，用于受保护路由中获取当前用户。
+    - 从 Authorization header 中读取 Bearer token（oauth2_scheme 完成）
+    - 解码 JWT，获取 sub（我们把用户名放在 sub）
+    - 从 DB 中加载 User 对象并返回
+    抛出 HTTPException(401) 表示认证失败。
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,7 +83,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session = Depend
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    # 从数据库查找用户
     statement = select(User).where(User.username == username)
     user = session.exec(statement).first()
     if not user:

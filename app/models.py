@@ -19,5 +19,6 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, nullable=False)
     password_hash: str
+    e_mail: Optional[str] = Field(default=None, index=True)
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)

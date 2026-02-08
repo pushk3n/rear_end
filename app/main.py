@@ -1,3 +1,18 @@
+"""
+app/main.py
+
+FastAPI 应用与路由定义。
+
+包含：
+- /ping 健康检查
+- /register 用户注册
+- /login 用户登录
+- /me 获取当前用户（需要 Authorization header）
+- /users/count 方便查看用户数量（快速检查用）
+
+关键点注释已写在文件中以便你学习后端请求流和依赖注入。
+"""
+
 import os
 from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import select
@@ -7,12 +22,11 @@ from app.models import User
 from app.schemas import RegisterIn, TokenOut, UserOut
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
-# 可通过环境变量关闭自动文档（生产环境可关闭以避免信息泄露）
+# 通过环境变量可关闭自动生成的 docs（生产中建议关闭或在代理层限制访问）
 DISABLE_DOCS = os.getenv("DISABLE_DOCS", "0") in ("1", "true", "True")
 
-# 创建 FastAPI 应用，docs_url/redoc_url 控制是否开启自动文档界面
 app = FastAPI(
-    title="MyBackend",
+    title="pushk3n",
     docs_url=None if DISABLE_DOCS else "/docs",
     redoc_url=None if DISABLE_DOCS else "/redoc",
 )
@@ -21,35 +35,38 @@ app = FastAPI(
 @app.on_event("startup")
 def on_startup():
     """
-    应用启动事件：确保数据库表已创建。
-    在第一次运行时会自动创建 SQLite 的 data.db 文件以及所需表。
+    应用启动时自动调用：确保数据库表已经创建（如果不存在则创建）。
+    这会在第一次运行时生成 data.db 文件（如果使用 SQLite）。
     """
     init_db()
 
 
 @app.get("/ping")
-def ping():
-    """
-    健康检查接口，返回固定 pong，用于验证服务是否可用。
-    """
+def ping() -> dict:
+    """健康检查接口，返回固定 pong"""
     return {"msg": "pong"}
 
 
 @app.post("/register", response_model=TokenOut)
 def register(payload: RegisterIn, session = Depends(get_session)):
     """
-    用户注册接口。
-
-    流程：
-    1. 检查用户名是否已存在
-    2. 哈希密码并写入数据库
-    3. 返回 JWT token
+    用户注册流程：
+    - 通过 Depends(get_session) 获取 DB 会话（每请求一个 session)
+    - 检查用户名和邮箱是否已存在
+    - 哈希密码并写入用户表
+    - 返回 JWT(access_token)
     """
-    statement = select(User).where(User.username == payload.username)
-    existing = session.exec(statement).first()
-    if existing:
+    # 检查用户名和邮箱唯一性
+    statement_usrname = select(User).where(User.username == payload.username)
+    statement_email = select(User).where(User.e_mail == payload.e_mail)
+    existing_usrname = session.exec(statement_usrname).first()
+    existing_email = session.exec(statement_email).first()
+    if existing_usrname:
         raise HTTPException(status_code=400, detail="username exists")
-    user = User(username=payload.username, password_hash=hash_password(payload.password))
+    if existing_email:
+        raise HTTPException(status_code=400, detail="email exists")
+    
+    user = User(username=payload.username, password_hash=hash_password(payload.password), e_mail=payload.e_mail)
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -60,9 +77,9 @@ def register(payload: RegisterIn, session = Depends(get_session)):
 @app.post("/login", response_model=TokenOut)
 def login(payload: RegisterIn, session = Depends(get_session)):
     """
-    用户登录接口。
-
-    验证用户名和密码，正确时返回 JWT。
+    登录流程：
+    - 查找用户并验证密码（使用 passlib 的 verify）
+    - 验证通过后签发 JWT 并返回
     """
     statement = select(User).where(User.username == payload.username)
     user = session.exec(statement).first()
@@ -75,8 +92,18 @@ def login(payload: RegisterIn, session = Depends(get_session)):
 @app.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     """
-    获取当前登录用户信息。
-
-    依赖 `get_current_user`，会解析 Authorization header 中的 Bearer token 并返回对应用户。
+    返回当前登录用户信息。
+    - current_user 由 get_current_user 解析 token 并从 DB 加载
     """
     return {"id": current_user.id, "username": current_user.username}
+
+
+@app.get("/users/count")
+def users_count(session = Depends(get_session)):
+    """
+    快速检查路由：返回用户数量（方便在没有 sqlite GUI 下做快速验证）。
+    仅供开发/学习使用。
+    """
+    statement = select(User)
+    users = session.exec(statement).all()
+    return {"count": len(users)}

@@ -15,8 +15,8 @@ engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 def init_db() -> None:
     """
     初始化数据库表结构。
-    在应用启动时调用一次（app.on_event("startup") 中已经调用），会根据 SQLModel 的 model 自动创建表。
-    对于简单项目使用 SQLite 时，这一步会在项目目录生成 data.db 文件。
+    在应用启动时调用一次( app.on_event("startup") 中已经调用) ，会根据 SQLModel 的 model 自动创建表。
+    对于简单项目使用 SQLite 时，这一步会在项目目录生成 data.db 文件.
     """
     SQLModel.metadata.create_all(engine)
 

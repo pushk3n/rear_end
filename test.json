@@ -1,0 +1,17 @@
+{
+    "detail":[{
+        "type":"json_invalid",
+        "loc":["body",23],
+        "msg":"JSON decode error",
+        "input":{},
+        "ctx":{
+            "error":"Expecting property name enclosed in double quotes"
+        }
+        }
+    ]
+}
+,
+{
+    "access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwdXNoazNuIiwiZXhwIjoxNzcwMjY5NjE0fQ.fTqmjkzjaVHUwEEmMXMeKJnMtMBFHASKNVbPxkdFeSg",
+    "token_type":"bearer"
+}
