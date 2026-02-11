@@ -11,6 +11,13 @@ class RegisterIn(BaseModel):
     password: str
     e_mail: Optional[str] = None
 
+class LoginIn(BaseModel):
+    """
+    登录请求数据结构。
+    使用 Pydantic(BaseModel)进行输入校验, FastAPI 会自动校验请求体并给出友好错误信息.
+    """
+    username: str
+    password: str
 
 class TokenOut(BaseModel):
     """

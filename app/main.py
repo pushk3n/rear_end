@@ -19,7 +19,7 @@ from sqlmodel import select
 
 from app.db import init_db, get_session
 from app.models import User
-from app.schemas import RegisterIn, TokenOut, UserOut
+from app.schemas import LoginIn, RegisterIn, TokenOut, UserOut
 from app.auth import hash_password, verify_password, create_access_token, get_current_user
 
 # 通过环境变量可关闭自动生成的 docs（生产中建议关闭或在代理层限制访问）
@@ -75,14 +75,14 @@ def register(payload: RegisterIn, session = Depends(get_session)):
 
 
 @app.post("/login", response_model=TokenOut)
-def login(payload: RegisterIn, session = Depends(get_session)):
+def login(payload: LoginIn, session = Depends(get_session)):
     """
     登录流程：
     - 查找用户并验证密码（使用 passlib 的 verify）
     - 验证通过后签发 JWT 并返回
     """
-    statement = select(User).where(User.username == payload.username)
-    user = session.exec(statement).first()
+    statement_usrname = select(User).where(User.username == payload.username)
+    user = session.exec(statement_usrname).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="invalid credentials")
     token = create_access_token({"sub": user.username})
@@ -95,7 +95,7 @@ def me(current_user: User = Depends(get_current_user)):
     返回当前登录用户信息。
     - current_user 由 get_current_user 解析 token 并从 DB 加载
     """
-    return {"id": current_user.id, "username": current_user.username}
+    return {"id": current_user.id, "username": current_user.username, "e_mail": current_user.e_mail}
 
 
 @app.get("/users/count")
